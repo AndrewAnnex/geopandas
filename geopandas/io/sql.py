@@ -115,9 +115,27 @@ def _read_postgis(
 
     SpatiaLite
 
-    >>> sql = "SELECT ST_Binary(geom) AS geom, highway FROM roads"
+    >>> sql = "SELECT ST_AsBinary(geom) AS geom, highway FROM roads"
     >>> df = geopandas.read_postgis(sql, con)  # doctest: +SKIP
     """
+    # check if this is a SpatiaLite table
+    if con.engine.name == 'sqlite':
+        #  always lower case sql query for matching
+        sqll = sql.lower()
+        # ensure spacing around geom
+        geom_coll =  f" {geom_col}".lower()
+        # todo: figure out better REGEX
+        # check if the user requested the geom_col
+        # if they didn't then don't do anything else 
+        # so the value error in _df_to_geodf is raised
+        if geom_coll in sqll:
+            # ensure the sql query has the ST_AsBinary wrapper for the geom_col, if not swap it in
+            expected_sql_geom_q = f" st_asbinary({geom_col.lower()}) as {geom_col.lower()} "
+            if expected_sql_geom_q not in sqll:
+                # assume the user has just requested geom_col
+                # we cannot anticipate all typos, if * is in select
+                # then maybe the statement should be inserted
+                sql = sql.replace(geom_coll, expected_sql_geom_q, 1)
 
     if chunksize is None:
         # read all in one chunk and return a single GeoDataFrame
